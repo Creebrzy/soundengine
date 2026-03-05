@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sound Engine — by Sound Fader Inc.</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050508;
+    --bg2: #0c0c14;
+    --bg3: #12121e;
+    --panel: #0e0e1a;
+    --border: #1e1e35;
+    --accent1: #00f0ff;
+    --accent2: #ff2d78;
+    --accent3: #a855f7;
+    --accent4: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #4a5568;
+    --glow1: 0 0 20px rgba(0,240,255,0.3);
+    --glow2: 0 0 20px rgba(255,45,120,0.3);
+    --glow3: 0 0 20px rgba(168,85,247,0.3);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ANIMATED BACKGROUND */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image: 
+      linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridShift 20s linear infinite;
+  }
+  @keyframes gridShift {
+    0% { background-position: 0 0; }
+    100% { background-position: 40px 40px; }
+  }
+  .bg-orb1, .bg-orb2, .bg-orb3 {
+    position: fixed; border-radius: 50%; filter: blur(120px); z-index: 0; pointer-events: none;
+  }
+  .bg-orb1 { width: 500px; height: 500px; background: rgba(0,240,255,0.04); top: -100px; left: -100px; animation: orbFloat1 15s ease-in-out infinite; }
+  .bg-orb2 { width: 400px; height: 400px; background: rgba(255,45,120,0.04); bottom: -50px; right: -100px; animation: orbFloat2 18s ease-in-out infinite; }
+  .bg-orb3 { width: 300px; height: 300px; background: rgba(168,85,247,0.05); top: 50%; left: 50%; animation: orbFloat3 12s ease-in-out infinite; }
+  @keyframes orbFloat1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(50px,80px)} }
+  @keyframes orbFloat2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-60px,-40px)} }
+  @keyframes orbFloat3 { 0%,100%{transform:translate(-50%,-50%)} 50%{transform:translate(-40%,-60%)} }
+
+  /* LAYOUT */
+  .container {
+    position: relative; z-index: 1;
+    max-width: 1300px; margin: 0 auto; padding: 20px;
+  }
+
+  /* HEADER */
+  header {
+    text-align: center; padding: 50px 20px 40px;
+    position: relative;
+  }
+  .header-badge {
+    display: inline-block;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 4px;
+    color: var(--accent1);
+    border: 1px solid rgba(0,240,255,0.3);
+    padding: 6px 18px; border-radius: 2px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    background: rgba(0,240,255,0.05);
+  }
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent1) 0%, var(--accent3) 50%, var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 30px rgba(0,240,255,0.3));
+  }
+  .subtitle {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .header-line {
+    width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent1), var(--accent3), var(--accent2), transparent);
+    margin: 30px 0 0;
+    opacity: 0.4;
+  }
+
+  /* SECTION HEADERS */
+  .section-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px; letter-spacing: 3px;
+    color: var(--accent3);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::before {
+    content: ''; display: block; width: 20px; height: 1px;
+    background: var(--accent3);
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--accent3), transparent);
+    opacity: 0.3;
+  }
+
+  /* GRID */
+  .dropdowns-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  /* FIELD CARDS */
+  .field-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .field-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    border-radius: 4px 4px 0 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .field-card:hover { border-color: rgba(0,240,255,0.3); box-shadow: var(--glow1); }
+  .field-card:hover::before { opacity: 1; background: var(--accent1); }
+  .field-card.pink:hover { border-color: rgba(255,45,120,0.3); box-shadow: var(--glow2); }
+  .field-card.pink:hover::before { background: var(--accent2); }
+  .field-card.purple:hover { border-color: rgba(168,85,247,0.3); box-shadow: var(--glow3); }
+  .field-card.purple:hover::before { background: var(--accent3); }
+
+  .field-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; letter-spacing: 2.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .field-label .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent1);
+    box-shadow: 0 0 6px var(--accent1);
+  }
+  .field-card.pink .field-label .dot { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .field-card.purple .field-label .dot { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+
+  select {
+    width: 100%;
+    background: var(--bg2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300f0ff'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  select:focus { border-color: var(--accent1); box-shadow: 0 0 10px rgba(0,240,255,0.15); }
+  select option { background: #0c0c18; color: var(--text); }
+
+  /* TEXTAREA FOR CUSTOM */
+  .custom-input {
+    width: 100%;
+    background: var(--bg2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    resize: none;
+    transition: border-color 0.2s;
+    height: 42px;
+  }
+  .custom-input:focus { border-color: var(--accent3); box-shadow: 0 0 10px rgba(168,85,247,0.15); }
+  .custom-input::placeholder { color: var(--muted); }
+
+  /* BPM SLIDER */
+  .bpm-display {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .bpm-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px; font-weight: 800;
+    color: var(--accent1);
+    min-width: 50px;
+    text-shadow: 0 0 10px var(--accent1);
+  }
+  input[type=range] {
+    flex: 1; height: 4px; appearance: none; -webkit-appearance: none;
+    background: var(--border); border-radius: 2px; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    background: var(--accent1); border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent1); cursor: pointer;
+  }
+
+  /* KEY/SCALE */
+  .key-scale-row { display: flex; gap: 8px; }
+  .key-scale-row select { flex: 1; }
+
+  /* ACTION BUTTONS */
+  .action-zone {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 30px 0;
+  }
+  @media(max-width: 700px) { .action-zone { grid-template-columns: 1fr; } }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    padding: 16px 24px;
+    border: none; border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.2s;
+  }
+  .btn::after {
+    content: ''; position: absolute; inset: 0;
+    background: white; opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .btn:hover::after { opacity: 0.07; }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-cyan {
+    background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(0,240,255,0.05));
+    color: var(--accent1);
+    border: 1px solid rgba(0,240,255,0.4);
+    box-shadow: 0 0 20px rgba(0,240,255,0.1), inset 0 0 20px rgba(0,240,255,0.05);
+  }
+  .btn-cyan:hover { box-shadow: 0 0 30px rgba(0,240,255,0.3), inset 0 0 20px rgba(0,240,255,0.1); }
+
+  .btn-pink {
+    background: linear-gradient(135deg, rgba(255,45,120,0.2), rgba(255,45,120,0.05));
+    color: var(--accent2);
+    border: 1px solid rgba(255,45,120,0.4);
+    box-shadow: 0 0 20px rgba(255,45,120,0.1), inset 0 0 20px rgba(255,45,120,0.05);
+  }
+  .btn-pink:hover { box-shadow: 0 0 30px rgba(255,45,120,0.3), inset 0 0 20px rgba(255,45,120,0.1); }
+
+  .btn-purple {
+    background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(168,85,247,0.05));
+    color: var(--accent3);
+    border: 1px solid rgba(168,85,247,0.4);
+    box-shadow: 0 0 20px rgba(168,85,247,0.1), inset 0 0 20px rgba(168,85,247,0.05);
+  }
+  .btn-purple:hover { box-shadow: 0 0 30px rgba(168,85,247,0.3), inset 0 0 20px rgba(168,85,247,0.1); }
+
+  .btn-gold {
+    background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.05));
+    color: var(--accent4);
+    border: 1px solid rgba(245,158,11,0.4);
+    box-shadow: 0 0 20px rgba(245,158,11,0.1);
+    grid-column: 1 / -1;
+    font-size: 13px; padding: 20px;
+  }
+  .btn-gold:hover { box-shadow: 0 0 40px rgba(245,158,11,0.3); }
+
+  .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid currentColor; border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* OUTPUT PANELS */
+  .output-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 20px;
+    display: none;
+    animation: fadeSlideIn 0.4s ease;
+  }
+  .output-panel.visible { display: block; }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .output-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .output-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  }
+  .output-title.cyan { color: var(--accent1); }
+  .output-title.pink { color: var(--accent2); }
+  .output-title.gold { color: var(--accent4); }
+
+  .copy-btn {
+    background: none; border: 1px solid var(--border); border-radius: 3px;
+    color: var(--muted); font-family: 'Space Mono', monospace;
+    font-size: 10px; padding: 5px 10px; cursor: pointer;
+    transition: all 0.2s; letter-spacing: 1px;
+  }
+  .copy-btn:hover { border-color: var(--accent1); color: var(--accent1); }
+
+  /* SUNO FIELDS OUTPUT */
+  .suno-fields {
+    display: grid; gap: 12px;
+  }
+  .suno-field {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px 16px;
+    position: relative;
+  }
+  .suno-field-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; letter-spacing: 2px;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .suno-field-value {
+    font-size: 12px; line-height: 1.6; color: var(--text);
+  }
+  .suno-field-value.highlight { color: var(--accent1); }
+
+  /* SONG IDEAS */
+  .song-ideas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .song-idea-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: default;
+  }
+  .song-idea-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; width: 3px; bottom: 0;
+    background: linear-gradient(180deg, var(--accent1), var(--accent3));
+  }
+  .song-idea-card:hover { border-color: rgba(0,240,255,0.2); transform: translateY(-2px); }
+  .song-num {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 2px; margin-bottom: 8px;
+  }
+  .song-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px; font-weight: 700;
+    color: var(--accent1);
+    margin-bottom: 8px; line-height: 1.3;
+  }
+  .song-desc {
+    font-size: 10px; line-height: 1.7; color: var(--muted);
+  }
+  .song-tags {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    margin-top: 10px;
+  }
+  .tag {
+    font-size: 9px; padding: 3px 8px;
+    border-radius: 2px; letter-spacing: 1px;
+    border: 1px solid rgba(0,240,255,0.2);
+    color: rgba(0,240,255,0.7);
+    background: rgba(0,240,255,0.05);
+  }
+
+  /* GENERATED PROMPT */
+  .prompt-box {
+    background: var(--bg2);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 3px;
+    padding: 16px;
+    font-size: 12px; line-height: 1.8;
+    color: var(--accent4);
+    font-family: 'Space Mono', monospace;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* RANDOMIZE */
+  .randomize-bar {
+    display: flex; justify-content: flex-end; margin-bottom: 12px;
+  }
+  .btn-sm {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; padding: 7px 14px; cursor: pointer;
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 3px; letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-sm:hover { border-color: var(--accent3); color: var(--accent3); }
+
+  /* DIVIDER */
+  .divider {
+    width: 100%; height: 1px;
+    background: var(--border); margin: 30px 0;
+  }
+
+  /* LOADING BAR */
+  .loading-bar {
+    height: 2px; background: var(--border);
+    border-radius: 1px; overflow: hidden; margin-top: 12px;
+    display: none;
+  }
+  .loading-bar.active { display: block; }
+  .loading-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent1), var(--accent3), var(--accent2));
+    animation: loadMove 1.5s ease-in-out infinite;
+    width: 40%;
+  }
+  @keyframes loadMove {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+
+  /* WAVEFORM DECORATION */
+  .waveform {
+    display: flex; align-items: center; gap: 2px;
+    height: 24px; margin-left: 10px;
+  }
+  .wv-bar {
+    width: 3px; background: var(--accent1);
+    border-radius: 1px; opacity: 0.6;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+  .wv-bar:nth-child(1){height:6px;animation-delay:0s}
+  .wv-bar:nth-child(2){height:14px;animation-delay:.1s}
+  .wv-bar:nth-child(3){height:20px;animation-delay:.2s}
+  .wv-bar:nth-child(4){height:10px;animation-delay:.3s}
+  .wv-bar:nth-child(5){height:22px;animation-delay:.4s}
+  .wv-bar:nth-child(6){height:8px;animation-delay:.5s}
+  .wv-bar:nth-child(7){height:16px;animation-delay:.6s}
+  @keyframes wave {
+    0%,100%{transform:scaleY(1)} 50%{transform:scaleY(0.3)}
+  }
+
+  footer {
+    text-align: center; padding: 40px 20px;
+    color: var(--muted); font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent3); }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-orb1"></div><div class="bg-orb2"></div><div class="bg-orb3"></div>
+
+<div class="container">
+  <header>
+    <div class="header-badge">AI Music Prompt Engine v2.1</div>
+    <h1>SOUND ENGINE</h1>
+    <p class="subtitle">curated by Sound Fader Inc.</p>
+    <div class="waveform" style="justify-content:center;height:30px;gap:3px;margin-top:16px;">
+      <div class="wv-bar"></div><div class="wv-bar"></div><div class="wv-bar"></div>
+      <div class="wv-bar"></div><div class="wv-bar"></div><div class="wv-bar"></div>
+      <div class="wv-bar"></div><div class="wv-bar"></div><div class="wv-bar"></div>
+      <div class="wv-bar"></div><div class="wv-bar"></div><div class="wv-bar"></div>
+      <div class="wv-bar"></div>
+    </div>
+    <div class="header-line"></div>
+  </header>
+
+  <!-- RANDOMIZE -->
+  <div class="randomize-bar">
+    <button class="btn-sm" onclick="randomizeAll()">⚄ Randomize All</button>
+  </div>
+
+  <!-- SECTION 1: CORE SOUND -->
+  <div class="section-title">01 — Core Sound Architecture</div>
+  <div class="dropdowns-grid">
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Genre / Subgenre</div>
+      <select id="genre">
+        <option value="">— Select Genre —</option>
+        <optgroup label="Electronic">
+          <option>House</option><option>Deep House</option><option>Tech House</option>
+          <option>Progressive House</option><option>Afro House</option><option>Techno</option>
+          <option>Melodic Techno</option><option>Acid Techno</option><option>Trance</option>
+          <option>Psytrance</option><option>Drum & Bass</option><option>Liquid DnB</option>
+          <option>Neurofunk</option><option>Dubstep</option><option>Riddim</option>
+          <option>Future Bass</option><option>Hardstyle</option><option>Breakbeat</option>
+          <option>UK Garage</option><option>2-Step</option><option>Footwork</option>
+          <option>Juke</option><option>Ambient Electronic</option><option>IDM</option>
+          <option>Glitch Hop</option><option>Electro</option><option>EBM</option>
+          <option>Industrial Electronic</option>
+        </optgroup>
+        <optgroup label="Hip-Hop / Rap">
+          <option>Trap</option><option>Drill</option><option>UK Drill</option>
+          <option>NY Drill</option><option>Boom Bap</option><option>Lo-fi Hip-Hop</option>
+          <option>Phonk</option><option>Cloud Rap</option><option>Emo Rap</option>
+          <option>Conscious Hip-Hop</option><option>Crunk</option><option>Grime</option>
+          <option>Afrotrap</option><option>Hyphy</option><option>Jersey Club</option>
+        </optgroup>
+        <optgroup label="Pop">
+          <option>Synth-pop</option><option>Dream Pop</option><option>Indie Pop</option>
+          <option>Electropop</option><option>Dark Pop</option><option>Hyperpop</option>
+          <option>Art Pop</option><option>K-Pop</option><option>J-Pop</option>
+          <option>Teen Pop</option><option>Chamber Pop</option>
+        </optgroup>
+        <optgroup label="R&B / Soul">
+          <option>Contemporary R&B</option><option>Neo Soul</option><option>Classic Soul</option>
+          <option>Funk</option><option>Quiet Storm</option><option>Alternative R&B</option>
+          <option>PBR&B</option><option>Gospel</option><option>Motown</option>
+        </optgroup>
+        <optgroup label="Rock">
+          <option>Indie Rock</option><option>Alternative Rock</option><option>Post-Rock</option>
+          <option>Shoegaze</option><option>Dream Rock</option><option>Grunge</option>
+          <option>Punk</option><option>Post-Punk</option><option>Math Rock</option>
+          <option>Prog Rock</option><option>Psychedelic Rock</option><option>Heavy Metal</option>
+          <option>Nu-Metal</option><option>Black Metal</option><option>Doom Metal</option>
+          <option>Death Metal</option><option>Post-Metal</option>
+        </optgroup>
+        <optgroup label="Jazz / Blues">
+          <option>Jazz Fusion</option><option>Nu-Jazz</option><option>Smooth Jazz</option>
+          <option>Bebop</option><option>Afrojazz</option><option>Delta Blues</option>
+          <option>Chicago Blues</option><option>Jazz Rap</option>
+        </optgroup>
+        <optgroup label="World">
+          <option>Afrobeats</option><option>Afropop</option><option>Amapiano</option>
+          <option>Dancehall</option><option>Reggae</option><option>Reggaeton</option>
+          <option>Latin Trap</option><option>Cumbia</option><option>Baile Funk</option>
+          <option>Bossa Nova</option><option>Flamenco</option><option>Bollywood</option>
+          <option>Salsa</option><option>Zouk</option><option>Highlife</option>
+        </optgroup>
+        <optgroup label="Classical / Cinematic">
+          <option>Orchestral</option><option>Neoclassical</option><option>Film Score</option>
+          <option>Dark Ambient</option><option>Drone</option><option>Minimalist</option>
+        </optgroup>
+        <optgroup label="Retro">
+          <option>Synthwave</option><option>Retrowave</option><option>Vaporwave</option>
+          <option>Outrun</option><option>Chillwave</option><option>80s Pop</option>
+          <option>90s R&B</option><option>2000s Crunk</option><option>Disco</option>
+          <option>Funk Disco</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card" id="subgenreCard">
+      <div class="field-label"><div class="dot"></div>Subgenre / Fusion <span style="font-size:8px;color:var(--muted);margin-left:6px;letter-spacing:1px;">(OPTIONAL)</span></div>
+      <select id="subgenre">
+        <option value="">— Refine or Cross-Blend —</option>
+        <optgroup label="Hip-Hop Fusions">
+          <option>Jazz Rap (hip-hop + jazz)</option>
+          <option>Trap Soul (trap + R&B)</option>
+          <option>Emo Rap (trap + alternative rock)</option>
+          <option>Lo-fi Boom Bap (lo-fi + classic hip-hop)</option>
+          <option>Drill Soul (drill + neo soul)</option>
+          <option>Phonk Trap (phonk + trap)</option>
+          <option>Rap Rock (hip-hop + rock)</option>
+          <option>Country Rap (trap + country)</option>
+          <option>Afrotrap (afrobeats + trap)</option>
+          <option>Cloud Rap (ambient + rap)</option>
+          <option>Abstract Hip-Hop (experimental + boom bap)</option>
+          <option>Conscious Trap (conscious rap + trap production)</option>
+        </optgroup>
+        <optgroup label="R&B Fusions">
+          <option>Alt R&B / PBR&B (R&B + indie/electronic)</option>
+          <option>Neo Soul Trap (neo soul + trap drums)</option>
+          <option>R&B Drill (contemporary R&B + drill)</option>
+          <option>Gospel R&B (gospel + contemporary R&B)</option>
+          <option>Quiet Storm Trap (quiet storm + 808s)</option>
+          <option>Indie R&B (indie pop + R&B)</option>
+          <option>Funk Soul (classic funk + modern soul)</option>
+          <option>Nu Soul Electronic (neo soul + electronic)</option>
+        </optgroup>
+        <optgroup label="Pop Fusions">
+          <option>Pop Trap (pop + trap production)</option>
+          <option>Dark Pop R&B (dark pop + R&B)</option>
+          <option>Electro Pop Trap (electropop + trap)</option>
+          <option>Hyperpop Trap (hyperpop + trap)</option>
+          <option>Bedroom Pop (lo-fi + indie pop)</option>
+          <option>Synth-Pop R&B (synth-pop + R&B)</option>
+          <option>Pop Punk Revival (pop + punk energy)</option>
+          <option>Latin Pop Trap (pop + Latin trap)</option>
+        </optgroup>
+        <optgroup label="Urban Crossovers">
+          <option>Afrobeats R&B (afrobeats + R&B)</option>
+          <option>Amapiano Trap (amapiano + trap)</option>
+          <option>Dancehall Trap (dancehall + trap)</option>
+          <option>Reggaeton R&B (reggaeton + R&B)</option>
+          <option>Grime R&B (grime + contemporary R&B)</option>
+          <option>UK Drill Soul (UK drill + soul)</option>
+          <option>Baile Funk Trap (baile funk + trap)</option>
+        </optgroup>
+        <optgroup label="Electronic Crossovers">
+          <option>Future Bass Trap (future bass + trap)</option>
+          <option>Deep House R&B (deep house + R&B)</option>
+          <option>Jersey Club R&B (jersey club + R&B)</option>
+          <option>EDM Pop (EDM + mainstream pop)</option>
+          <option>Ambient Trap (ambient + trap)</option>
+          <option>Lo-fi Chill Hop (lo-fi + hip-hop)</option>
+        </optgroup>
+        <optgroup label="Classic / Retro Blends">
+          <option>Neo Boom Bap (boom bap + modern production)</option>
+          <option>Retro Trap (retro 80s + trap)</option>
+          <option>Vaporwave R&B (vaporwave aesthetics + R&B)</option>
+          <option>New Jack Swing Revival (new jack swing + modern)</option>
+          <option>G-Funk Revival (G-Funk + modern trap)</option>
+          <option>Crunk Revival (crunk + modern production)</option>
+          <option>90s R&B Trap (90s R&B sound + trap beats)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Drum Pattern</div>
+      <select id="drum">
+        <option value="">— Select Pattern —</option>
+        <optgroup label="Electronic">
+          <option>Four-on-the-floor kick</option><option>Sidechain pumping kick</option>
+          <option>Minimal kick-snare</option><option>Roland TR-808 pattern</option>
+          <option>TR-909 techno pattern</option><option>LinnDrum machine beat</option>
+          <option>Glitch/stuttered beat</option><option>Polyrhythmic grid</option>
+          <option>Micro-timing swing</option>
+        </optgroup>
+        <optgroup label="Hip-Hop">
+          <option>Trap hi-hat rolls (1/32)</option><option>Boom bap snare backbeat</option>
+          <option>Lo-fi dusty breaks</option><option>Hard 808 bass drops</option>
+          <option>Drill sliding 808s</option><option>Phonk double-time kick</option>
+        </optgroup>
+        <optgroup label="Live/Organic">
+          <option>Brushed jazz swing</option><option>Half-time groove</option>
+          <option>Double-time fill</option><option>Afrobeat polyrhythm</option>
+          <option>Brazilian samba pattern</option><option>Reggaeton dembow</option>
+          <option>Dancehall one-drop</option><option>Bossa nova clave</option>
+          <option>Funk 16th note groove</option><option>Ghost note snare</option>
+        </optgroup>
+        <optgroup label="Breaks">
+          <option>Amen break loop</option><option>Jungle breakbeat chop</option>
+          <option>Ragga jungle rhythm</option><option>Breakbeat shuffle</option>
+          <option>Footwork rapid kick</option><option>Jersey club pattern</option>
+        </optgroup>
+        <optgroup label="Rock">
+          <option>Straight rock kick-snare</option><option>Punk eighth note stomp</option>
+          <option>Metal blast beat</option><option>Post-rock building swell</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>BPM / Tempo</div>
+      <div class="bpm-display">
+        <span class="bpm-val" id="bpmVal">120</span>
+        <input type="range" id="bpm" min="60" max="200" value="120" 
+          oninput="document.getElementById('bpmVal').textContent=this.value">
+      </div>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Key & Scale</div>
+      <div class="key-scale-row">
+        <select id="key">
+          <option value="">Key</option>
+          <option>C</option><option>C#/Db</option><option>D</option><option>D#/Eb</option>
+          <option>E</option><option>F</option><option>F#/Gb</option><option>G</option>
+          <option>G#/Ab</option><option>A</option><option>A#/Bb</option><option>B</option>
+        </select>
+        <select id="scale">
+          <option value="">Scale</option>
+          <option>Major</option><option>Natural Minor</option><option>Harmonic Minor</option>
+          <option>Melodic Minor</option><option>Dorian</option><option>Phrygian</option>
+          <option>Lydian</option><option>Mixolydian</option><option>Locrian</option>
+          <option>Pentatonic Major</option><option>Pentatonic Minor</option>
+          <option>Blues Scale</option><option>Whole Tone</option><option>Diminished</option>
+          <option>Chromatic</option>
+        </select>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SECTION 2: MELODIC ELEMENTS -->
+  <div class="section-title">02 — Melodic & Harmonic Layer</div>
+  <div class="dropdowns-grid">
+
+    <div class="field-card pink">
+      <div class="field-label"><div class="dot"></div>Melody Source</div>
+      <select id="melody">
+        <option value="">— Select Source —</option>
+        <optgroup label="Keyboards">
+          <option>Rhodes electric piano</option><option>Wurlitzer piano</option>
+          <option>Grand piano arpeggios</option><option>Harpsichord runs</option>
+          <option>Organ melodic line</option><option>Clavi funk riff</option>
+        </optgroup>
+        <optgroup label="Synthesizers">
+          <option>Supersaw synth lead</option><option>Plucked synth arp</option>
+          <option>FM bell melody</option><option>Wavetable morphing lead</option>
+          <option>Analog moog lead</option><option>Juno pad chord stabs</option>
+          <option>Theremin slide</option>
+        </optgroup>
+        <optgroup label="String/Wind">
+          <option>Violin pizzicato</option><option>Cello glide</option>
+          <option>Flute runs</option><option>Saxophone melody</option>
+          <option>Trumpet fanfare</option><option>French horn swell</option>
+          <option>Classical guitar fingerpicking</option><option>Slide guitar</option>
+          <option>Harmonica wail</option><option>Banjo picking</option>
+        </optgroup>
+        <optgroup label="Percussion Melody">
+          <option>Marimba xylophone</option><option>Vibraphone jazz</option>
+          <option>Steel pan melody</option><option>Kalimba thumb piano</option>
+          <option>Gamelan bells</option><option>Mbira shimmer</option>
+        </optgroup>
+        <optgroup label="Ethnic/World">
+          <option>Sitar raaga runs</option><option>Koto pentatonic pluck</option>
+          <option>Duduk woodwind</option><option>Oud Arabic melody</option>
+          <option>Pan flute</option><option>Erhu bowed string</option>
+        </optgroup>
+        <optgroup label="Vocal Melody">
+          <option>Choir melody stabs</option><option>Wordless vocal hum</option>
+          <option>Falsetto lead line</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card pink">
+      <div class="field-label"><div class="dot"></div>Chord Movement</div>
+      <select id="chords">
+        <option value="">— Select Progression —</option>
+        <optgroup label="Classic">
+          <option>I – IV – V – I (major resolution)</option>
+          <option>I – V – vi – IV (pop anthem)</option>
+          <option>vi – IV – I – V (emotional pop)</option>
+          <option>I – vi – IV – V (doo-wop)</option>
+          <option>ii – V – I (jazz turnaround)</option>
+        </optgroup>
+        <optgroup label="Minor/Dark">
+          <option>i – VII – VI – VII (natural minor loop)</option>
+          <option>i – iv – VII – III (dark melodic)</option>
+          <option>i – VI – III – VII (Andalusian cadence)</option>
+          <option>i – iv – v – i (pure minor)</option>
+          <option>i – ii° – V – i (harmonic minor)</option>
+        </optgroup>
+        <optgroup label="Modal">
+          <option>Dorian mode vamp (i – IV)</option>
+          <option>Lydian mode (I – II floating)</option>
+          <option>Phrygian drop (i – bII)</option>
+          <option>Mixolydian (I – VII – IV)</option>
+        </optgroup>
+        <optgroup label="Advanced">
+          <option>Chromatic mediant shift</option>
+          <option>Modal interchange borrowing</option>
+          <option>Tritone substitution</option>
+          <option>Deceptive cadence resolution</option>
+          <option>Pedal point static bass</option>
+          <option>Quartal harmony (stacked 4ths)</option>
+          <option>Cluster chord texture</option>
+          <option>Slash chord inversions</option>
+        </optgroup>
+        <optgroup label="Power / Simple">
+          <option>Power chord progression</option>
+          <option>Sus2 / Sus4 unresolved</option>
+          <option>One-chord drone vamp</option>
+          <option>Two-chord loop hypnotic</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card pink">
+      <div class="field-label"><div class="dot"></div>Bass Movement</div>
+      <select id="bass">
+        <option value="">— Select Bass Style —</option>
+        <optgroup label="Electronic Bass">
+          <option>808 sub bass rumble</option><option>Reese bass wobble</option>
+          <option>Sidechain pumping synth bass</option><option>Neuro bass growl</option>
+          <option>Portamento glide synth</option><option>Acid squelch 303</option>
+          <option>Plucked electric synth bass</option>
+        </optgroup>
+        <optgroup label="Groove Bass">
+          <option>Slap bass funk groove</option><option>Fretless bass glide</option>
+          <option>Walking jazz bass line</option><option>Ghost note funk bass</option>
+          <option>Reggae roots bassline</option><option>Latin tumba bassline</option>
+        </optgroup>
+        <optgroup label="Movement Patterns">
+          <option>Octave jump pattern</option><option>Chromatic approach notes</option>
+          <option>Arpeggio bass pattern</option><option>Pentatonic bass run</option>
+          <option>Half-time feel bass</option><option>Double-time bass drive</option>
+          <option>Pedal tone root lock</option>
+        </optgroup>
+      </select>
+    </div>
+
+  </div>
+
+  <!-- SECTION 3: TEXTURE & SOUND -->
+  <div class="section-title">03 — Texture, Sound Design & Atmosphere</div>
+  <div class="dropdowns-grid">
+
+    <div class="field-card purple">
+      <div class="field-label"><div class="dot"></div>Atmosphere / Mood</div>
+      <select id="atmosphere">
+        <option value="">— Select Atmosphere —</option>
+        <optgroup label="Dark / Intense">
+          <option>Dark and menacing</option><option>Sinister and cold</option>
+          <option>Tense and anxious</option><option>Brooding introspection</option>
+          <option>Apocalyptic epic</option><option>Gothic haunting</option>
+        </optgroup>
+        <optgroup label="Euphoric / Uplifting">
+          <option>Euphoric peak moment</option><option>Triumphant and soaring</option>
+          <option>Joyful and celebratory</option><option>Warm summer energy</option>
+          <option>Spiritual transcendence</option>
+        </optgroup>
+        <optgroup label="Emotional / Nostalgic">
+          <option>Bittersweet nostalgia</option><option>Deep melancholy</option>
+          <option>Longing and yearning</option><option>Romantic and intimate</option>
+          <option>Hopeful vulnerability</option>
+        </optgroup>
+        <optgroup label="Dreamy / Ethereal">
+          <option>Dreamy surreal haze</option><option>Ethereal otherworldly</option>
+          <option>Lucid dream state</option><option>Floating weightless</option>
+          <option>Liminal void space</option>
+        </optgroup>
+        <optgroup label="Gritty / Urban">
+          <option>Gritty street edge</option><option>Late night city drives</option>
+          <option>Hustler motivation</option><option>Underground raw energy</option>
+        </optgroup>
+        <optgroup label="Chill / Ambient">
+          <option>Lo-fi cozy warmth</option><option>Meditative stillness</option>
+          <option>Hypnotic repetition</option><option>Lazy summer afternoon</option>
+          <option>Late night introspection</option>
+        </optgroup>
+        <optgroup label="Playful / Energetic">
+          <option>Playful and quirky</option><option>Chaotic party energy</option>
+          <option>Childlike wonder</option><option>Pumping dance floor</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card purple">
+      <div class="field-label"><div class="dot"></div>Sound Design</div>
+      <select id="sounddesign">
+        <option value="">— Select Sound Design —</option>
+        <optgroup label="Synthesis">
+          <option>Granular texture clouds</option><option>Wavetable morphing pads</option>
+          <option>FM synthesis metallic tones</option><option>Additive harmonic stacks</option>
+          <option>Subtractive analog warmth</option><option>Physical modeling strings</option>
+          <option>Spectral processing smear</option>
+        </optgroup>
+        <optgroup label="Processing">
+          <option>Heavy distortion saturation</option><option>Convolution reverb spaces</option>
+          <option>Tape delay feedback loops</option><option>Glitch bitcrusher crush</option>
+          <option>Ring modulation clang</option><option>Vocoder robotic effect</option>
+          <option>Stutter edit rhythms</option>
+        </optgroup>
+        <optgroup label="Texture Sources">
+          <option>Field recordings ambience</option><option>Vinyl crackle and hiss</option>
+          <option>Circuit-bent glitches</option><option>Noise-based pads</option>
+          <option>Modular patch chaos</option><option>Found object percussion</option>
+        </optgroup>
+        <optgroup label="Layers">
+          <option>Dense orchestral samples</option><option>Lush string pad layers</option>
+          <option>Vintage ROMpler pads</option><option>Foley sound design</option>
+          <option>Cinematic braams/risers</option><option>White noise sweeps</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card purple">
+      <div class="field-label"><div class="dot"></div>Vocal Chop / Insert</div>
+      <select id="vocal">
+        <option value="">— Select Vocal Style —</option>
+        <optgroup label="Processed Vocals">
+          <option>Auto-tuned melodic stutter</option><option>Pitched vocal chops loop</option>
+          <option>Reversed vocal ghost</option><option>Time-stretched vowel pads</option>
+          <option>Formant-shifted alien voice</option><option>Telephone filter effect</option>
+          <option>Underwater vocal blur</option>
+        </optgroup>
+        <optgroup label="Harmonics">
+          <option>Multi-layered vocal harmonics</option><option>Gospel choir stack</option>
+          <option>Ethereal falsetto layers</option><option>Deep throat harmonics</option>
+          <option>Barbershop quartet chop</option>
+        </optgroup>
+        <optgroup label="Rhythmic Chops">
+          <option>Chopped phrase stabs</option><option>Ad-lib burst inserts</option>
+          <option>Vocal percussion chop</option><option>Single word loop</option>
+          <option>Breath and air textures</option>
+        </optgroup>
+        <optgroup label="Special Effects">
+          <option>Vocoder harmony grid</option><option>Robotic talk box effect</option>
+          <option>Whisper texture layer</option><option>Acapella loop fragment</option>
+          <option>Spoken word insert</option><option>Scat/vocalese riff</option>
+          <option>No vocals (instrumental)</option>
+        </optgroup>
+      </select>
+    </div>
+
+  </div>
+
+  <!-- SECTION 4: PRODUCTION -->
+  <div class="section-title">04 — Production, Samples & Purpose</div>
+  <div class="dropdowns-grid">
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Sample Loops</div>
+      <select id="samples">
+        <option value="">— Select Sample Type —</option>
+        <optgroup label="Classic Breaks">
+          <option>Amen break vinyl chop</option><option>Funky drummer loop</option>
+          <option>Think break loop</option><option>Apache break</option>
+          <option>Soul pride drum break</option>
+        </optgroup>
+        <optgroup label="Era-Based">
+          <option>90s RnB string sample</option><option>70s soul horn stab</option>
+          <option>80s synth loop chop</option><option>2000s crunk sample</option>
+          <option>Motown drum loop</option>
+        </optgroup>
+        <optgroup label="Genre Loops">
+          <option>Jazz chord progression loop</option><option>Gospel organ loop</option>
+          <option>Funk guitar riff loop</option><option>Latin conga loop</option>
+          <option>Afrobeat rhythm loop</option><option>Reggae skank loop</option>
+        </optgroup>
+        <optgroup label="Texture/FX">
+          <option>Vinyl crackle ambience</option><option>Crowd noise texture</option>
+          <option>Film dialogue insert</option><option>Retro game sample</option>
+          <option>Nature field recording</option><option>Industrial clang loop</option>
+          <option>Radio static crackle</option>
+        </optgroup>
+        <optgroup label="No Samples">
+          <option>100% original synthesis</option><option>Live instruments only</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Track Purpose</div>
+      <select id="purpose">
+        <option value="">— Select Purpose —</option>
+        <optgroup label="Performance">
+          <option>Club banger peak hour</option><option>Opening DJ set track</option>
+          <option>Closing emotional set</option><option>Warmer/builder track</option>
+          <option>Festival main stage</option>
+        </optgroup>
+        <optgroup label="Lifestyle">
+          <option>Workout motivation pump</option><option>Morning energy ritual</option>
+          <option>Late night drive</option><option>Study/focus flow</option>
+          <option>Cooking/entertaining</option>
+        </optgroup>
+        <optgroup label="Emotional">
+          <option>Healing and catharsis</option><option>Romantic/intimate setting</option>
+          <option>Emotional release cry</option><option>Hype and confidence boost</option>
+          <option>Meditation/mindfulness</option>
+        </optgroup>
+        <optgroup label="Media">
+          <option>Film/TV score placement</option><option>Video game OST</option>
+          <option>Commercial/ad sync</option><option>Podcast intro/outro</option>
+          <option>YouTube background music</option><option>Short-form content (TikTok/Reels)</option>
+        </optgroup>
+        <optgroup label="Artistic">
+          <option>Personal artistic expression</option><option>Protest/social anthem</option>
+          <option>Storytelling narrative</option><option>Experimental art piece</option>
+          <option>Genre-defining statement</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Mixing Aesthetic</div>
+      <select id="mixing">
+        <option value="">— Select Mix Style —</option>
+        <option>Pristine clean modern mix</option>
+        <option>Lo-fi compressed warm</option>
+        <option>Loud mastered loudness war</option>
+        <option>Wide stereo expansive</option>
+        <option>Mono punchy club mix</option>
+        <option>Cinematic dynamic range</option>
+        <option>Analog tape saturation</option>
+        <option>Digital crisp precision</option>
+        <option>Wet reverb-drenched</option>
+        <option>Dry intimate close-mic</option>
+        <option>Vintage low-fi warmth</option>
+        <option>Hyper-compressed urban</option>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Song Structure</div>
+      <select id="structure">
+        <option value="">— Select Structure —</option>
+        <option>Verse – Chorus – Verse – Chorus – Bridge – Chorus</option>
+        <option>Intro – Drop – Break – Drop – Outro</option>
+        <option>AABA (jazz standard form)</option>
+        <option>Through-composed (no repeats)</option>
+        <option>Loop-based hypnotic build</option>
+        <option>Intro – Build – Drop – Breakdown – Drop</option>
+        <option>Verse – Pre-Chorus – Chorus – Post-Chorus</option>
+        <option>Two-part suite (A section / B section)</option>
+        <option>Cinematic scene-based structure</option>
+        <option>Free-form improvised</option>
+        <option>Call and response pattern</option>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Lyrical Theme</div>
+      <select id="lyric">
+        <option value="">— Select Theme —</option>
+        <optgroup label="Emotional">
+          <option>Heartbreak and loss</option><option>New love euphoria</option>
+          <option>Self-empowerment rise</option><option>Loneliness and longing</option>
+          <option>Healing and moving on</option><option>Inner demons struggle</option>
+        </optgroup>
+        <optgroup label="Social">
+          <option>Street life realism</option><option>Success and ambition</option>
+          <option>Political resistance</option><option>Unity and community</option>
+          <option>Generational trauma</option><option>Identity and belonging</option>
+        </optgroup>
+        <optgroup label="Philosophical">
+          <option>Existential questioning</option><option>Spiritual awakening</option>
+          <option>Time and mortality</option><option>Dreams and reality blur</option>
+          <option>Nature and cosmos</option>
+        </optgroup>
+        <optgroup label="Playful">
+          <option>Party and celebration</option><option>Flex and braggadocio</option>
+          <option>Romance and flirtation</option><option>Nostalgia and memories</option>
+          <option>Surreal abstract imagery</option>
+        </optgroup>
+        <optgroup label="No Lyrics">
+          <option>Instrumental — no vocals</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card">
+      <div class="field-label"><div class="dot"></div>Era / Reference</div>
+      <select id="era">
+        <option value="">— Select Era —</option>
+        <option>1960s Motown & Soul golden era</option>
+        <option>1970s Funk & Disco golden age</option>
+        <option>1980s New Wave & Synth-pop</option>
+        <option>Late 80s Hip-Hop formation</option>
+        <option>Early 90s Grunge & Alternative</option>
+        <option>Mid 90s Golden Age Hip-Hop</option>
+        <option>Late 90s Electronic revolution</option>
+        <option>Early 2000s Y2K pop & crunk</option>
+        <option>Mid 2000s indie rock revival</option>
+        <option>2010s EDM festival era</option>
+        <option>2010s Trap dominance</option>
+        <option>2015s Streaming era pop</option>
+        <option>2020s Bedroom producer era</option>
+        <option>Current 2024 hyperpop/phonk</option>
+        <option>Timeless / No era reference</option>
+        <option>Futuristic sound design</option>
+      </select>
+    </div>
+
+    <div class="field-card pink">
+      <div class="field-label"><div class="dot"></div>Producer Influence</div>
+      <select id="producer">
+        <option value="">— Select Producer —</option>
+        <optgroup label="Trap / Hip-Hop Architects">
+          <option>Metro Boomin — cinematic trap, dark orchestral 808s</option>
+          <option>Southside — hard-hitting 808 trap, gothic melodies</option>
+          <option>Wheezy — melodic trap, soaring synth leads</option>
+          <option>Murda Beatz — bouncy trap, punchy kicks</option>
+          <option>Pi'erre Bourne — playful melodic trap, anime-inspired</option>
+          <option>Tay Keith — aggressive banger trap, loud kicks</option>
+          <option>Cubeatz — atmospheric trap, lush pads</option>
+          <option>Pyrex Whippa — drill-influenced trap, eerie melodies</option>
+          <option>Ronny J — distorted 808s, chaotic trap energy</option>
+          <option>Zaytoven — keys-driven trap, gospel undertones</option>
+          <option>Lex Luger — epic cinematic trap, wailing synths</option>
+          <option>Young Chop — stripped-down drill trap, Chicago sound</option>
+          <option>808 Mafia — lush orchestral trap, thunderous bass</option>
+        </optgroup>
+        <optgroup label="Drill Specialists">
+          <option>AXL Beats — UK drill, dark minor keys, sliding 808s</option>
+          <option>TM88 — ethereal trap/drill, melodic hooks</option>
+          <option>Hardo — Chicago drill, gritty minimal beats</option>
+          <option>Sango — UK drill meets Afrobeats</option>
+          <option>Russ Millions — UK/NY drill crossover</option>
+        </optgroup>
+        <optgroup label="Boom Bap / Golden Era">
+          <option>DJ Premier — gritty boom bap, vinyl chops, jazz samples</option>
+          <option>Pete Rock — soulful boom bap, warm jazz loops</option>
+          <option>Large Professor — hard-hitting drums, melodic soul</option>
+          <option>RZA — cinematic boom bap, kung-fu samples, dark textures</option>
+          <option>J Dilla — dusty soul samples, off-kilter swing drums</option>
+          <option>Madlib — lo-fi psychedelic boom bap, rare vinyl</option>
+          <option>Alchemist — grimy boom bap, dark hypnotic loops</option>
+          <option>Evidence — Pacific Northwest boom bap, introspective</option>
+          <option>Statik Selektah — classic boom bap, sample-heavy</option>
+          <option>Nottz — soulful boom bap, lush melodic layers</option>
+        </optgroup>
+        <optgroup label="R&B / Neo Soul">
+          <option>No I.D. — soulful hip-hop/R&B, jazz-influenced layers</option>
+          <option>Timbaland — innovative rhythms, futuristic R&B, textured percussion</option>
+          <option>Darkchild (Rodney Jerkins) — polished R&B, catchy hooks</option>
+          <option>Jermaine Dupri — smooth R&B/pop, melodic bounce</option>
+          <option>Bryan-Michael Cox — lush R&B balladry, warm chords</option>
+          <option>Raphael Saadiq — vintage soul-influenced R&B</option>
+          <option>D'Mile — neo soul meets pop, lush harmonics</option>
+          <option>Harmony Samuels — UK-flavored R&B, gospel choirs</option>
+          <option>Salaam Remi — soulful roots R&B, organic textures</option>
+          <option>James Fauntleroy — melodic R&B, introspective production</option>
+          <option>Frank Dukes — lo-fi sample-driven R&B/hip-hop</option>
+          <option>Carter Lang — alternative R&B, experimental textures</option>
+        </optgroup>
+        <optgroup label="Pop / Crossover">
+          <option>Max Martin — polished pop, massive hooks, anthemic chorus</option>
+          <option>Pharrell Williams — funk-influenced pop, layered percussion</option>
+          <option>Kanye West — sped-up soul samples, chipmunk soul, grand orchestration</option>
+          <option>Mike Dean — cinematic synth-led hip-hop/pop, dark textures</option>
+          <option>WondaGurl — lush atmospheric hip-hop/pop, cinematic 808s</option>
+          <option>Boi-1da — hard-hitting hip-hop/pop crossover</option>
+          <option>Hit-Boy — sparkling pop-rap, melodic punchy production</option>
+          <option>DJ Khalil — cinematic hip-hop/pop, dynamic swells</option>
+          <option>Jake One — soul-sampling hip-hop/pop hybrids</option>
+          <option>T-Minus — anthemic hip-hop/pop, clean modern sound</option>
+          <option>Vinylz — polished dark pop/hip-hop, melodic precision</option>
+        </optgroup>
+        <optgroup label="ATL / Southern Sound">
+          <option>Lil Jon — crunk energy, heavy bass, crowd chants</option>
+          <option>Drumma Boy — Southern trunk music, aggressive 808s</option>
+          <option>Bangladesh — energetic ATL trap/pop hybrids</option>
+          <option>Shawty Redd — crunk/trap origins, ATL bounce</option>
+          <option>London on da Track — melodic ATL trap, lush strings</option>
+          <option>OG Parker — feel-good melodic trap, Caribbean-influenced</option>
+          <option>Buddah Bless — smooth Southern trap melodies</option>
+        </optgroup>
+        <optgroup label="NYC / East Coast">
+          <option>Just Blaze — anthemic soul-flip hip-hop, grand horns</option>
+          <option>Swizz Beatz — energetic NYC rap, aggressive drums</option>
+          <option>Kanye West — sped-up soul, Chicago meets NYC</option>
+          <option>Havoc (Mobb Deep) — grimy Queens boom bap, dark minor keys</option>
+          <option>Buckwild — jazz-infused East Coast boom bap</option>
+          <option>Large Professor — raw NYC street hip-hop</option>
+        </optgroup>
+        <optgroup label="West Coast">
+          <option>Dr. Dre — polished West Coast G-Funk, deep bass, live instruments</option>
+          <option>DJ Quik — smooth G-Funk, Parliament-Funkadelic influence</option>
+          <option>DJ Mustard — minimalist ratchet trap, bouncy West Coast</option>
+          <option>Terrace Martin — jazz-infused West Coast hip-hop/R&B</option>
+          <option>Thundercat — hypnotic funk-jazz bass-driven production</option>
+          <option>Kaytranada — funky electronic/R&B, danceable rhythms</option>
+          <option>Sounwave — atmospheric West Coast hip-hop, spiritual textures</option>
+          <option>Battlecat — West Coast smooth rap, rolling bass</option>
+        </optgroup>
+        <optgroup label="Global / Afrobeats / Urban World">
+          <option>P2J — Afrobeats/R&B fusion, melodic grooves</option>
+          <option>Killertunes — Afropop/Afrobeats energy</option>
+          <option>Masterkraft — Afrobeats anthems, infectious hooks</option>
+          <option>Rexxie — Afrobeats/drill crossover</option>
+          <option>Murda Beatz — Toronto trap/Afrobeats fusion</option>
+          <option>Popcaan's producers — dancehall trap crossover</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="field-card purple">
+      <div class="field-label"><div class="dot"></div>Artist Influence</div>
+      <input class="custom-input" id="artist" type="text" 
+        placeholder="e.g. Kendrick, Bicep, FKA Twigs, Frank Ocean...">
+    </div>
+
+    <div class="field-card purple">
+      <div class="field-label"><div class="dot"></div>Custom Descriptor</div>
+      <input class="custom-input" id="custom" type="text" 
+        placeholder="Any extra vibe, texture, or detail...">
+    </div>
+
+  </div>
+
+  <!-- ACTION BUTTONS -->
+  <div class="divider"></div>
+  <div class="action-zone">
+    <button class="btn btn-cyan" id="btnSunoFields" onclick="generateSunoFields()">
+      🎛️ Generate Suno Fields
+    </button>
+    <button class="btn btn-pink" id="btnPrompt" onclick="generatePrompt()">
+      ✦ Build Full Prompt
+    </button>
+    <button class="btn btn-purple" id="btnSongIdeas" onclick="generateSongIdeas()">
+      💡 Generate 10 Song Ideas
+    </button>
+    <button class="btn btn-gold" id="btnAll" onclick="generateAll()">
+      ⚡ GENERATE EVERYTHING
+    </button>
+  </div>
+  <div class="loading-bar" id="loadingBar"><div class="loading-bar-fill"></div></div>
+
+  <!-- SUNO FIELDS OUTPUT -->
+  <div class="output-panel" id="sunoFieldsPanel">
+    <div class="output-header">
+      <span class="output-title cyan">◈ Suno-Ready Fields</span>
+      <button class="copy-btn" onclick="copyText('sunoFieldsContent')">Copy All</button>
+    </div>
+    <div class="suno-fields" id="sunoFieldsContent"></div>
+  </div>
+
+  <!-- PROMPT OUTPUT -->
+  <div class="output-panel" id="promptPanel">
+    <div class="output-header">
+      <span class="output-title gold">◈ Generated Suno Prompt</span>
+      <button class="copy-btn" onclick="copyText('promptContent')">Copy Prompt</button>
+    </div>
+    <div class="prompt-box" id="promptContent"></div>
+  </div>
+
+  <!-- SONG IDEAS OUTPUT -->
+  <div class="output-panel" id="songIdeasPanel">
+    <div class="output-header">
+      <span class="output-title pink">◈ 10 Unique Song Concepts</span>
+      <button class="copy-btn" onclick="copyText('songIdeasContent')">Copy Ideas</button>
+    </div>
+    <div id="songIdeasContent"></div>
+  </div>
+
+  <footer>SOUND ENGINE &nbsp;·&nbsp; CURATED BY SOUND FADER INC. &nbsp;·&nbsp; POWERED BY CLAUDE &nbsp;·&nbsp; ©2025</footer>
+</div>
+
+<script>
+const SELECTIONS = {
+  genre: 'genre', drum: 'drum', bpm: 'bpm', key: 'key', scale: 'scale',
+  melody: 'melody', chords: 'chords', bass: 'bass', atmosphere: 'atmosphere',
+  sounddesign: 'sounddesign', vocal: 'vocal', samples: 'samples',
+  purpose: 'purpose', mixing: 'mixing', structure: 'structure',
+  lyric: 'lyric', era: 'era', artist: 'artist', custom: 'custom'
+};
+
+function getValues() {
+  return {
+    genre: document.getElementById('genre').value,
+    subgenre: document.getElementById('subgenre').value,
+    drum: document.getElementById('drum').value,
+    bpm: document.getElementById('bpm').value,
+    key: document.getElementById('key').value,
+    scale: document.getElementById('scale').value,
+    melody: document.getElementById('melody').value,
+    chords: document.getElementById('chords').value,
+    bass: document.getElementById('bass').value,
+    atmosphere: document.getElementById('atmosphere').value,
+    sounddesign: document.getElementById('sounddesign').value,
+    vocal: document.getElementById('vocal').value,
+    samples: document.getElementById('samples').value,
+    purpose: document.getElementById('purpose').value,
+    mixing: document.getElementById('mixing').value,
+    structure: document.getElementById('structure').value,
+    lyric: document.getElementById('lyric').value,
+    era: document.getElementById('era').value,
+    producer: document.getElementById('producer').value,
+    artist: document.getElementById('artist').value,
+    custom: document.getElementById('custom').value
+  };
+}
+
+function randomizeAll() {
+  const selects = document.querySelectorAll('select');
+  selects.forEach(sel => {
+    const opts = sel.options;
+    if (opts.length > 1) {
+      const idx = Math.floor(Math.random() * (opts.length - 1)) + 1;
+      sel.value = opts[idx].value;
+    }
+  });
+  const bpm = document.getElementById('bpm');
+  const val = Math.floor(Math.random() * 100) + 70;
+  bpm.value = val;
+  document.getElementById('bpmVal').textContent = val;
+}
+
+function setLoading(active) {
+  const bar = document.getElementById('loadingBar');
+  bar.classList.toggle('active', active);
+  document.querySelectorAll('.btn').forEach(b => b.disabled = active);
+}
+
+async function callClaude(prompt) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const data = await response.json();
+  return data.content.map(b => b.text || '').join('');
+}
+
+function buildContext(v) {
+  const parts = [];
+  if (v.genre) parts.push(`Genre: ${v.genre}`);
+  if (v.subgenre) parts.push(`Subgenre / Fusion: ${v.subgenre}`);
+  if (v.drum) parts.push(`Drum Pattern: ${v.drum}`);
+  if (v.bpm) parts.push(`BPM: ${v.bpm}`);
+  if (v.key && v.scale) parts.push(`Key: ${v.key} ${v.scale}`);
+  else if (v.key) parts.push(`Key: ${v.key}`);
+  if (v.melody) parts.push(`Melody: ${v.melody}`);
+  if (v.chords) parts.push(`Chords: ${v.chords}`);
+  if (v.bass) parts.push(`Bass: ${v.bass}`);
+  if (v.atmosphere) parts.push(`Atmosphere: ${v.atmosphere}`);
+  if (v.sounddesign) parts.push(`Sound Design: ${v.sounddesign}`);
+  if (v.vocal) parts.push(`Vocals: ${v.vocal}`);
+  if (v.samples) parts.push(`Samples: ${v.samples}`);
+  if (v.purpose) parts.push(`Purpose: ${v.purpose}`);
+  if (v.mixing) parts.push(`Mixing: ${v.mixing}`);
+  if (v.structure) parts.push(`Structure: ${v.structure}`);
+  if (v.lyric) parts.push(`Lyrical Theme: ${v.lyric}`);
+  if (v.era) parts.push(`Era Reference: ${v.era}`);
+  if (v.producer) parts.push(`Producer Influence: ${v.producer}`);
+  if (v.artist) parts.push(`Artist Influence: ${v.artist}`);
+  if (v.custom) parts.push(`Custom: ${v.custom}`);
+  return parts.length > 0 ? parts.join('\n') : 'No specific selections made — generate something unique and experimental.';
+}
+
+async function generateSunoFields() {
+  const v = getValues();
+  const ctx = buildContext(v);
+  setLoading(true);
+  try {
+    const result = await callClaude(`You are a Suno AI music prompt expert. Based on these musical selections:
+
+${ctx}
+
+Generate optimized Suno platform fields. Return ONLY a JSON array with these exact fields:
+[
+  {"label": "Style of Music", "value": "..."},
+  {"label": "Mood & Atmosphere", "value": "..."},
+  {"label": "Instrumentation", "value": "..."},
+  {"label": "Vocal Style", "value": "..."},
+  {"label": "Song Structure", "value": "..."},
+  {"label": "Sonic Texture", "value": "..."},
+  {"label": "Production Notes", "value": "..."},
+  {"label": "Tempo & Feel", "value": "..."}
+]
+Make values concise, specific, and optimized for Suno's prompt engine. Return ONLY valid JSON, nothing else.`);
+
+    let json;
+    try {
+      const clean = result.replace(/```json|```/g, '').trim();
+      json = JSON.parse(clean);
+    } catch(e) {
+      json = [{ label: "Style of Music", value: result }];
+    }
+
+    const panel = document.getElementById('sunoFieldsPanel');
+    const content = document.getElementById('sunoFieldsContent');
+    content.innerHTML = json.map(f => `
+      <div class="suno-field">
+        <div class="suno-field-label">${f.label}</div>
+        <div class="suno-field-value">${f.value}</div>
+      </div>
+    `).join('');
+    panel.classList.add('visible');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    alert('Error generating fields. Check your connection.');
+  }
+  setLoading(false);
+}
+
+async function generatePrompt() {
+  const v = getValues();
+  const ctx = buildContext(v);
+  setLoading(true);
+  try {
+    const result = await callClaude(`You are a master Suno AI prompt engineer who crafts prompts that produce extraordinary, unique tracks that stand out.
+
+Musical parameters selected:
+${ctx}
+
+Create ONE powerful, evocative Suno prompt (max 200 words) that:
+- Uses rich, specific language Suno understands
+- Combines all the selected elements cohesively
+- Includes genre tags, mood descriptors, instrumentation
+- Adds unique production details that make this track stand out
+- Uses comma-separated style tags and descriptive sentences
+
+Format: Start with comma-separated style tags in brackets, then a evocative description paragraph. Make it sound exceptional and unique.`);
+
+    const panel = document.getElementById('promptPanel');
+    document.getElementById('promptContent').textContent = result.trim();
+    panel.classList.add('visible');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    alert('Error generating prompt. Check your connection.');
+  }
+  setLoading(false);
+}
+
+async function generateSongIdeas() {
+  const v = getValues();
+  const ctx = buildContext(v);
+  setLoading(true);
+  try {
+    const result = await callClaude(`You are a visionary music A&R and producer. Based on these musical parameters:
+
+${ctx}
+
+Generate exactly 10 unique, compelling song concepts. For each, return ONLY a JSON array:
+[
+  {
+    "title": "Song Title",
+    "concept": "2-sentence description of the song concept and emotional journey",
+    "uniqueTwist": "One sentence on what makes this track stand out and different",
+    "tags": ["tag1", "tag2", "tag3"]
+  }
+]
+Make each concept bold, evocative, and commercially interesting. Think like a Grammy-winning producer. Return ONLY valid JSON array, nothing else.`);
+
+    let ideas;
+    try {
+      const clean = result.replace(/```json|```/g, '').trim();
+      ideas = JSON.parse(clean);
+    } catch(e) {
+      document.getElementById('songIdeasContent').innerHTML = `<p style="color:var(--muted);font-size:12px;">${result}</p>`;
+      document.getElementById('songIdeasPanel').classList.add('visible');
+      setLoading(false);
+      return;
+    }
+
+    const colors = ['var(--accent1)', 'var(--accent2)', 'var(--accent3)', 'var(--accent4)'];
+    const grid = document.createElement('div');
+    grid.className = 'song-ideas-grid';
+
+    ideas.forEach((idea, i) => {
+      const color = colors[i % colors.length];
+      const card = document.createElement('div');
+      card.className = 'song-idea-card';
+      card.style.cssText = `--card-accent:${color}`;
+      card.innerHTML = `
+        <div class="song-num">#${String(i+1).padStart(2,'0')}</div>
+        <div class="song-title" style="color:${color}">${idea.title || 'Untitled'}</div>
+        <div class="song-desc">${idea.concept || ''}</div>
+        ${idea.uniqueTwist ? `<div class="song-desc" style="margin-top:8px;color:rgba(255,255,255,0.5);font-style:italic">↳ ${idea.uniqueTwist}</div>` : ''}
+        <div class="song-tags">
+          ${(idea.tags||[]).map(t => `<span class="tag" style="border-color:${color}33;color:${color}">${t}</span>`).join('')}
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    const content = document.getElementById('songIdeasContent');
+    content.innerHTML = '';
+    content.appendChild(grid);
+    document.getElementById('songIdeasPanel').classList.add('visible');
+    document.getElementById('songIdeasPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    alert('Error generating song ideas. Check your connection.');
+  }
+  setLoading(false);
+}
+
+async function generateAll() {
+  const v = getValues();
+  const ctx = buildContext(v);
+  setLoading(true);
+  try {
+    const [fields, prompt, ideas] = await Promise.all([
+      callClaude(`You are a Suno AI music prompt expert. Based on these musical selections:\n${ctx}\n\nGenerate optimized Suno platform fields. Return ONLY a JSON array with these exact fields:\n[\n  {"label": "Style of Music", "value": "..."},\n  {"label": "Mood & Atmosphere", "value": "..."},\n  {"label": "Instrumentation", "value": "..."},\n  {"label": "Vocal Style", "value": "..."},\n  {"label": "Song Structure", "value": "..."},\n  {"label": "Sonic Texture", "value": "..."},\n  {"label": "Production Notes", "value": "..."},\n  {"label": "Tempo & Feel", "value": "..."}\n]\nReturn ONLY valid JSON, nothing else.`),
+      callClaude(`You are a master Suno AI prompt engineer.\n\nMusical parameters:\n${ctx}\n\nCreate ONE powerful Suno prompt (max 200 words) with comma-separated style tags in brackets followed by an evocative description. Make it unique and extraordinary.`),
+      callClaude(`You are a visionary music producer. Based on:\n${ctx}\n\nGenerate exactly 10 unique song concepts as JSON array:\n[{"title":"...","concept":"2-sentence description","uniqueTwist":"what makes it stand out","tags":["tag1","tag2","tag3"]}]\nReturn ONLY valid JSON array.`)
+    ]);
+
+    // Process fields
+    try {
+      const f = JSON.parse(fields.replace(/```json|```/g, '').trim());
+      document.getElementById('sunoFieldsContent').innerHTML = f.map(item => `
+        <div class="suno-field">
+          <div class="suno-field-label">${item.label}</div>
+          <div class="suno-field-value">${item.value}</div>
+        </div>`).join('');
+    } catch { document.getElementById('sunoFieldsContent').innerHTML = `<p style="color:var(--muted)">${fields}</p>`; }
+    document.getElementById('sunoFieldsPanel').classList.add('visible');
+
+    // Process prompt
+    document.getElementById('promptContent').textContent = prompt.trim();
+    document.getElementById('promptPanel').classList.add('visible');
+
+    // Process ideas
+    try {
+      const ideasArr = JSON.parse(ideas.replace(/```json|```/g, '').trim());
+      const colors = ['var(--accent1)', 'var(--accent2)', 'var(--accent3)', 'var(--accent4)'];
+      const grid = document.createElement('div');
+      grid.className = 'song-ideas-grid';
+      ideasArr.forEach((idea, i) => {
+        const color = colors[i % colors.length];
+        const card = document.createElement('div');
+        card.className = 'song-idea-card';
+        card.innerHTML = `
+          <div class="song-num">#${String(i+1).padStart(2,'0')}</div>
+          <div class="song-title" style="color:${color}">${idea.title || 'Untitled'}</div>
+          <div class="song-desc">${idea.concept || ''}</div>
+          ${idea.uniqueTwist ? `<div class="song-desc" style="margin-top:8px;color:rgba(255,255,255,0.5);font-style:italic">↳ ${idea.uniqueTwist}</div>` : ''}
+          <div class="song-tags">${(idea.tags||[]).map(t => `<span class="tag" style="border-color:${color}33;color:${color}">${t}</span>`).join('')}</div>`;
+        grid.appendChild(card);
+      });
+      const sc = document.getElementById('songIdeasContent');
+      sc.innerHTML = ''; sc.appendChild(grid);
+    } catch { document.getElementById('songIdeasContent').innerHTML = `<p style="color:var(--muted)">${ideas}</p>`; }
+    document.getElementById('songIdeasPanel').classList.add('visible');
+
+    document.getElementById('sunoFieldsPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    alert('Error generating. Check your connection and try again.');
+  }
+  setLoading(false);
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  let text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btns = document.querySelectorAll('.copy-btn');
+    btns.forEach(b => { if(b.onclick.toString().includes(id)) { b.textContent = '✓ Copied!'; setTimeout(()=>b.textContent='Copy All', 2000); }});
+  });
+}
+</script>
+</body>
+</html>
